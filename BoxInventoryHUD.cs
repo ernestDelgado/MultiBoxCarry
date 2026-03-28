@@ -1,6 +1,7 @@
 ﻿using System;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace MultiBoxCarry
 {
@@ -14,31 +15,22 @@ namespace MultiBoxCarry
 
         private PlayerObjectHolder holder;
 
-        public BoxInventoryHUD(IntPtr ptr) : base(ptr)
-        {
-        }
+        public BoxInventoryHUD(IntPtr ptr) : base(ptr) { }
 
         private void Update()
         {
             if (!_created)
-            {
                 TryCreateHud();
-            }
 
             if (_text != null)
-            {
                 UpdateHudText();
-            }
         }
 
         private void TryCreateHud()
         {
-            //CHECKS:
             GameObject uiRoot = GameObject.Find("---UI---");
             if (uiRoot == null)
-            {
                 return;
-            }
 
             Transform ingameCanvas = uiRoot.transform.Find("Ingame Canvas");
             if (ingameCanvas == null)
@@ -48,16 +40,11 @@ namespace MultiBoxCarry
             }
 
             Transform timeTransform = ingameCanvas.Find("Time");
-            if (timeTransform == null)
-            {
-                Plugin.Log.LogWarning("[HUD] Time not found");
-                return;
-            }
-
             Transform timeBgTransform = ingameCanvas.Find("Time BG");
-            if (timeBgTransform == null)
+
+            if (timeTransform == null || timeBgTransform == null)
             {
-                Plugin.Log.LogWarning("[HUD] Time BG not found");
+                Plugin.Log.LogWarning("[HUD] Time or Time BG not found");
                 return;
             }
 
@@ -65,77 +52,85 @@ namespace MultiBoxCarry
             if (holder == null)
                 return;
 
+            // Find the vanilla TMP so we can copy its look only
+            TextMeshProUGUI sourceText =
+                timeTransform.GetComponent<TextMeshProUGUI>() ??
+                timeTransform.GetComponentInChildren<TextMeshProUGUI>(true);
 
-            //HUD Creation:
-            GameObject textClone = GameObject.Instantiate(timeTransform.gameObject, ingameCanvas);
-            textClone.name = "InventoryHUD";
-            _textGO = textClone;
-
-            RectTransform textRect = textClone.GetComponent<RectTransform>();
-            if (textRect != null)
+            if (sourceText == null)
             {
-                textRect.anchoredPosition = new Vector2(
-                    textRect.anchoredPosition.x,
-                    textRect.anchoredPosition.y - 40f
-                );
-
-                textRect.localScale = new Vector3(1.2f, 1.2f, 1f);
-            }
-
-            GameObject bgClone = GameObject.Instantiate(timeBgTransform.gameObject, ingameCanvas);
-            bgClone.name = "InventoryHUD_BG";
-            _bgGO = bgClone;
-
-            RectTransform bgRect = bgClone.GetComponent<RectTransform>();
-            if (bgRect != null)
-            {
-                bgRect.localScale = new Vector3(0.4f, 0.4f, 1f);
-
-                if (textRect != null)
-                {
-                    bgRect.anchoredPosition = textRect.anchoredPosition + new Vector2(20f, 0f);
-                }
-            }
-
-            // Put background behind text
-            bgClone.transform.SetSiblingIndex(textClone.transform.GetSiblingIndex());
-
-            _text = textClone.GetComponent<TextMeshProUGUI>();
-            if (_text == null)
-            {
-                _text = textClone.GetComponentInChildren<TextMeshProUGUI>(true);
-            }
-
-            if (_text == null)
-            {
-                Plugin.Log.LogWarning("[HUD] No TextMeshProUGUI found on cloned Time");
+                Plugin.Log.LogWarning("[HUD] Could not find source TMP on Time");
                 return;
             }
 
-            // Start hidden until count > 0
-            if (_textGO != null)
-                _textGO.SetActive(false);
+            // Create fresh text object
+            _textGO = new GameObject("InventoryHUD");
+            _textGO.transform.SetParent(ingameCanvas, false);
 
-            if (_bgGO != null)
-                _bgGO.SetActive(false);
+            RectTransform textRect = _textGO.AddComponent<RectTransform>();
 
-            Plugin.Log.LogInfo("[HUD] InventoryHUD created");
+            RectTransform sourceRect = sourceText.GetComponent<RectTransform>();
+
+            // Copy anchor/pivot/size from vanilla time text
+            textRect.anchorMin = sourceRect.anchorMin;
+            textRect.anchorMax = sourceRect.anchorMax;
+            textRect.pivot = sourceRect.pivot;
+            textRect.sizeDelta = sourceRect.sizeDelta;
+            textRect.anchoredPosition = sourceRect.anchoredPosition + new Vector2(0f, -40f);
+            textRect.localScale = new Vector3(1.2f, 1.2f, 1f);
+
+            _text = _textGO.AddComponent<TextMeshProUGUI>();
+
+            CopyTmpStyle(sourceText, _text);
+            _text.text = "0";
+            _text.alignment = sourceText.alignment;
+
+            // Background can still be cloned if you want,
+            // but we remove scripts by only keeping Image hierarchy.
+            _bgGO = GameObject.Instantiate(timeBgTransform.gameObject, ingameCanvas);
+            _bgGO.name = "InventoryHUD_BG";
+
+            RectTransform bgRect = _bgGO.GetComponent<RectTransform>();
+            if (bgRect != null)
+            {
+                bgRect.anchoredPosition = textRect.anchoredPosition + new Vector2(20f, 0f);
+                bgRect.localScale = new Vector3(0.4f, 0.4f, 1f);
+            }
+
+            _bgGO.transform.SetSiblingIndex(_textGO.transform.GetSiblingIndex());
+
+            _textGO.SetActive(false);
+            _bgGO.SetActive(false);
+
             _created = true;
+            Plugin.Log.LogInfo("[HUD] Fresh TMP HUD created");
         }
+
+        private void CopyTmpStyle(TextMeshProUGUI source, TextMeshProUGUI dest)
+        {
+            dest.font = source.font;
+            dest.fontSharedMaterial = source.fontSharedMaterial;
+            dest.fontSize = source.fontSize;
+            dest.color = source.color;
+            dest.alpha = source.alpha;
+            dest.enableWordWrapping = source.enableWordWrapping;
+            dest.overflowMode = source.overflowMode;
+            dest.richText = source.richText;
+            dest.raycastTarget = false;
+            dest.horizontalAlignment = source.horizontalAlignment;
+            dest.verticalAlignment = source.verticalAlignment;
+            dest.margin = source.margin;
+        }
+
 
         private void UpdateHudText()
         {
             BoxInventory inventory = PlayerInventoryManager.Inventory;
             int queueCount = inventory != null ? inventory.Count : 0;
 
-            int heldCount = 0;
-
-            if (holder != null && holder.CurrentObject != null)
-            {
-                heldCount = 1;
-            }
-
+            int heldCount = (holder != null && holder.CurrentObject != null) ? 1 : 0;
             int totalCount = queueCount + heldCount;
+
             bool shouldShow = totalCount > 0;
 
             if (_textGO != null)
@@ -144,7 +139,9 @@ namespace MultiBoxCarry
             if (_bgGO != null)
                 _bgGO.SetActive(shouldShow);
 
-            _text.text = totalCount + "";
+            string newText = totalCount.ToString();
+            if (_text.text != newText)
+                _text.text = newText;
         }
     }
 }

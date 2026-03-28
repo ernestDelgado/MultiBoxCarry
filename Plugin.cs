@@ -12,8 +12,17 @@ namespace MultiBoxCarry
         internal static new BepInEx.Logging.ManualLogSource Log;
         private Harmony _harmony;
 
+        private static bool _initialized = false;
+
         public override void Load()
         {
+            if (_initialized)
+            {
+                base.Log.LogInfo("MultiBoxCarry already initalized. Skipping Duplicate.");
+                return;
+            }
+            _initialized = true;
+
             Log = base.Log;
             Log.LogInfo("Multi Box Carry loading...");
 

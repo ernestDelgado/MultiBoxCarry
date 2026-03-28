@@ -35,8 +35,6 @@ namespace MultiBoxCarry
                     return true;
                 }
 
-                
-
                 //CHECK: Camera Existance
                 Camera cam = Camera.main;
                 if (cam == null)
@@ -109,6 +107,11 @@ namespace MultiBoxCarry
 
                 if (hitBox == heldBox)
                     continue;
+
+                if (hitBox.OccupyOwner != null)
+                    continue;
+
+                
 
                 return hitBox;
             }

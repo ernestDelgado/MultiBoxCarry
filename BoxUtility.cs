@@ -9,25 +9,26 @@ namespace MultiBoxCarry
             if (playerTransform == null || box == null)
                 return;
 
+            box.SetOccupy(true, playerTransform);
             SetBoxVisible(box, false);
             SetBoxColliders(box, false);
             SetBoxPhysicsQueued(box);
-
             box.transform.SetParent(playerTransform, false);
             box.transform.localPosition = localOffset;
             box.transform.localRotation = Quaternion.identity;
         }
 
-        public static void RestoreBox(Box box)
+        public static void RestoreBox(Box box, Transform playerTransform)
         {
             if (box == null)
                 return;
 
-            box.transform.SetParent(null, true);
-
+            box.SetOccupy(false, playerTransform);
             SetBoxVisible(box, true);
             SetBoxColliders(box, true);
             SetBoxPhysicsWorld(box);
+
+            box.transform.SetParent(null, true);
         }
 
         public static void SetBoxVisible(Box box, bool visible)
@@ -84,6 +85,8 @@ namespace MultiBoxCarry
             rb.isKinematic = false;
             rb.detectCollisions = true;
         }
+
+ 
 
         public static Vector3 GetQueueLocalOffset(int index)
         {

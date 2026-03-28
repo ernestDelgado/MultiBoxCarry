@@ -8,13 +8,13 @@ namespace MultiBoxCarry
         public static bool TryQueueBox(PlayerInteraction player, Box heldBox, Box targetBox)
         {
             if (player == null || heldBox == null || targetBox == null)
-                return true;
+                return false;
 
             BoxInventory inventory = PlayerInventoryManager.Inventory;
             if (inventory == null || inventory.IsFull)
             {
                 Plugin.Log.LogInfo("[InventoryController] Queue full.");
-                return true;
+                return false;
             }
 
             int queueIndex = inventory.Count;
@@ -64,7 +64,7 @@ namespace MultiBoxCarry
             if (nextBox == null)
                 return true;
 
-            BoxUtility.RestoreBox(nextBox);
+            BoxUtility.RestoreBox(nextBox, player.transform);
 
             IInteractable interactable = nextBox.GetComponent<IInteractable>();
             if (interactable == null)
