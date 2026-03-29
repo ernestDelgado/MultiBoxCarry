@@ -1,66 +1,75 @@
 ﻿using UnityEngine;
+using static HarmonyLib.Code;
 
 namespace MultiBoxCarry
 {
     internal static class BoxUtility
     {
-        public static void HideAndAttachBox(Transform playerTransform, Box box, Vector3 localOffset)
+        public static void HideAndAttachBox(Transform playerTransform, IQueuableBox queueBox, Vector3 localOffset)
         {
-            if (playerTransform == null || box == null)
+            if (playerTransform == null || queueBox == null)
                 return;
 
-            box.SetOccupy(true, playerTransform);
-            SetBoxVisible(box, false);
-            SetBoxColliders(box, false);
-            SetBoxPhysicsQueued(box);
-            box.transform.SetParent(playerTransform, false);
-            box.transform.localPosition = localOffset;
-            box.transform.localRotation = Quaternion.identity;
+            queueBox.HideAndAttach(playerTransform, localOffset);
+            
         }
 
-        public static void RestoreBox(Box box, Transform playerTransform)
+        internal static void HideAndAttachShared(Transform playerTransform, IQueuableBox queueBox, Vector3 localOffset)
         {
-            if (box == null)
-                return;
-
-            box.SetOccupy(false, playerTransform);
-            SetBoxVisible(box, true);
-            SetBoxColliders(box, true);
-            SetBoxPhysicsWorld(box);
-
-            box.transform.SetParent(null, true);
+            SetBoxVisible(queueBox, false);
+            SetBoxColliders(queueBox, false);
+            SetBoxPhysicsQueued(queueBox);
+            queueBox.transform.SetParent(playerTransform, false);
+            queueBox.transform.localPosition = localOffset;
+            queueBox.transform.localRotation = Quaternion.identity;
         }
 
-        public static void SetBoxVisible(Box box, bool visible)
+        public static void RestoreBox(IQueuableBox queueBox, Transform playerTransform)
         {
-            if (box == null)
+            if (queueBox == null)
                 return;
 
-            foreach (var renderer in box.GetComponentsInChildren<Renderer>(true))
+            queueBox.Restore(playerTransform);
+        }
+
+        internal static void RestoreShared(Transform playerTransform, IQueuableBox queueBox)
+        {
+            queueBox.transform.SetParent(null, true);
+            SetBoxVisible(queueBox, true);
+            SetBoxColliders(queueBox, true);
+            SetBoxPhysicsWorld(queueBox);
+        }
+
+        public static void SetBoxVisible(IQueuableBox queueBox, bool visible)
+        {
+            if (queueBox == null)
+                return;
+
+            foreach (var renderer in queueBox.transform.gameObject.GetComponentsInChildren<Renderer>(true))
             {
                 if (renderer != null)
                     renderer.enabled = visible;
             }
         }
 
-        public static void SetBoxColliders(Box box, bool enabled)
+        public static void SetBoxColliders(IQueuableBox queueBox, bool enabled)
         {
-            if (box == null)
+            if (queueBox == null)
                 return;
 
-            foreach (var collider in box.GetComponentsInChildren<Collider>(true))
+            foreach (var collider in queueBox.transform.GetComponentsInChildren<Collider>(true))
             {
                 if (collider != null)
                     collider.enabled = enabled;
             }
         }
 
-        public static void SetBoxPhysicsQueued(Box box)
+        public static void SetBoxPhysicsQueued(IQueuableBox queueBox)
         {
-            if (box == null)
+            if (queueBox == null)
                 return;
 
-            var rb = box.GetComponent<Rigidbody>();
+            var rb = queueBox.transform.GetComponent<Rigidbody>();
             if (rb == null)
                 return;
 
@@ -71,12 +80,12 @@ namespace MultiBoxCarry
             rb.interpolation = RigidbodyInterpolation.None;
         }
 
-        public static void SetBoxPhysicsWorld(Box box)
+        public static void SetBoxPhysicsWorld(IQueuableBox queueBox)
         {
-            if (box == null)
+            if (queueBox == null)
                 return;
 
-            var rb = box.GetComponent<Rigidbody>();
+            var rb = queueBox.transform.GetComponent<Rigidbody>();
             if (rb == null)
                 return;
 
@@ -85,8 +94,6 @@ namespace MultiBoxCarry
             rb.isKinematic = false;
             rb.detectCollisions = true;
         }
-
- 
 
         public static Vector3 GetQueueLocalOffset(int index)
         {

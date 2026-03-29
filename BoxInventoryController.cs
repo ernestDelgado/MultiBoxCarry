@@ -5,7 +5,7 @@ namespace MultiBoxCarry
 {
     internal static class BoxInventoryController
     {
-        public static bool TryQueueBox(PlayerInteraction player, Box heldBox, Box targetBox)
+        public static bool TryQueueBox(PlayerInteraction player, IQueuableBox heldBox, IQueuableBox targetBox)
         {
             if (player == null || heldBox == null || targetBox == null)
                 return false;
@@ -18,9 +18,7 @@ namespace MultiBoxCarry
             }
 
             int queueIndex = inventory.Count;
-
-            // returns RackSlot of Box, otherwise Null 
-            var rackSlot = GetRackSlot(targetBox);
+            RackSlot rackSlot = GetRackSlot(targetBox);
 
             // RACK CASE
             if (rackSlot != null)
@@ -28,27 +26,39 @@ namespace MultiBoxCarry
                 bool sameProduct = IsSameProduct(heldBox, targetBox);
                 bool leftShiftHeld = Keyboard.current != null && Keyboard.current.leftShiftKey.isPressed;
 
+                // Same product on shelf and no shift = let vanilla do its normal shelf swap/store behavior
                 if (sameProduct && !leftShiftHeld)
-                {
-                    return false; // let vanilla handle
-                }
+                    return false;
 
-                player.GetComponent<BoxInteraction>().DropBox();
-                inventory.Enqueue(heldBox);
+                heldBox.Drop(player); //pass player for BoxInteraction or FurnitureInteraction
+
+                if (!inventory.Enqueue(heldBox))
+                    return false;
+
                 BoxUtility.HideAndAttachBox(player.transform, heldBox, BoxUtility.GetQueueLocalOffset(queueIndex));
+
+                // Let vanilla take the target box from the rack
                 rackSlot.InstantInteract();
 
-                return true; // block Vanilla
+                return true; // block vanilla original logic
             }
 
             // WORLD CASE
-            player.GetComponent<BoxInteraction>().DropBox();
-            inventory.Enqueue(heldBox);
-            BoxUtility.HideAndAttachBox(player.transform, heldBox, BoxUtility.GetQueueLocalOffset(queueIndex));
-            player.SetCurrentInteractable(targetBox.GetComponent<IInteractable>());
-            player.Interact();
+            heldBox.Drop(player);
 
-            return true; // block vanilla
+            if (!inventory.Enqueue(heldBox))
+                return false;
+
+            BoxUtility.HideAndAttachBox(player.transform, heldBox, BoxUtility.GetQueueLocalOffset(queueIndex));
+
+            IInteractable interactable = targetBox.transform.GetComponent<IInteractable>();
+            if (interactable != null)
+            {
+                player.SetCurrentInteractable(interactable);
+                player.Interact();
+            }
+
+            return true; // block vanilla original logic
         }
 
         public static bool TryPromoteNextBox(PlayerInteraction player)
@@ -60,15 +70,16 @@ namespace MultiBoxCarry
             if (inventory == null || inventory.IsEmpty)
                 return true;
 
-            Box nextBox = inventory.Dequeue();
-            if (nextBox == null)
+            IQueuableBox nextQueuedBox = inventory.Dequeue();
+            if (nextQueuedBox == null)
                 return true;
 
-            BoxUtility.RestoreBox(nextBox, player.transform);
+            BoxUtility.RestoreBox(nextQueuedBox, player.transform);
 
-            IInteractable interactable = nextBox.GetComponent<IInteractable>();
+            IInteractable interactable = GetInteractable(nextQueuedBox);
             if (interactable == null)
             {
+                ReflowQueuedBoxes(player);
                 return true;
             }
 
@@ -91,39 +102,62 @@ namespace MultiBoxCarry
 
             for (int i = 0; i < inventory.QueuedBoxes.Count; i++)
             {
-                Box box = inventory.QueuedBoxes[i];
-                if (box == null)
+                IQueuableBox queuedBox = inventory.QueuedBoxes[i];
+                if (queuedBox == null)
                     continue;
 
-                box.transform.SetParent(player.transform, false);
-                box.transform.localPosition = BoxUtility.GetQueueLocalOffset(i);
-                box.transform.localRotation = Quaternion.identity;
+                queuedBox.transform.SetParent(player.transform, false);
+                queuedBox.transform.localPosition = BoxUtility.GetQueueLocalOffset(i);
+                queuedBox.transform.localRotation = Quaternion.identity;
             }
         }
 
-        private static RackSlot GetRackSlot(Box box)
+        private static IInteractable GetInteractable(IQueuableBox queuedBox)
         {
-            if (box == null)
+            if (queuedBox == null || queuedBox.Raw == null)
                 return null;
-            
-            var parent = box.transform.parent;
+
+            if (queuedBox.Raw is Component component)
+                return component.GetComponent<IInteractable>();
+
+            return null;
+        }
+
+        private static RackSlot GetRackSlot(IQueuableBox queueBox)
+        {
+            if (queueBox == null)
+                return null;
+
+            if (!(queueBox is BoxAdapter))
+                return null;
+
+            Transform parent = queueBox.transform.parent;
             if (parent == null)
                 return null;
 
-            var rackSlot = parent.GetComponent<RackSlot>();
-
-            return rackSlot;
+            return parent.GetComponent<RackSlot>();
         }
 
-        private static bool IsSameProduct(Box heldBox, Box targetBox)
+        private static bool IsSameProduct(IQueuableBox heldBox, IQueuableBox targetBox)
         {
             if (heldBox == null || targetBox == null)
                 return false;
 
-            if (heldBox.Product == null || targetBox.Product == null)
+            BoxAdapter heldAdapter = heldBox as BoxAdapter;
+            if (heldAdapter == null)
                 return false;
 
-            return heldBox.Product == targetBox.Product;
+            BoxAdapter targetAdapter = targetBox as BoxAdapter;
+            if (targetAdapter == null)
+                return false;
+
+            Box held = heldAdapter.GetBox();
+            Box target = targetAdapter.GetBox();
+
+            if (held.Product == null || target.Product == null)
+                return false;
+
+            return held.Product == target.Product;
         }
     }
 }

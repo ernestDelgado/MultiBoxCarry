@@ -37,12 +37,11 @@ namespace MultiBoxCarry
                 if (__instance == null || interaction == null)
                     return;
 
-                if (!(interaction is BoxInteraction))
+                if (!((interaction is BoxInteraction) || (interaction is FurnitureBoxInteraction)))
                     return;
 
                 PlayerObjectHolder player = __instance.GetComponent<PlayerObjectHolder>();
                 player.SetNullCurrentObject();
-
                 OnThrowMessanger.GaveMessage();
             }
             catch (System.Exception ex)
@@ -52,8 +51,51 @@ namespace MultiBoxCarry
         }
     }
 
+
+    [HarmonyPatch(typeof(FurniturePlacingMode), "PlacingMode")]
+    internal static class Patch_FurniturePlacingMode_PlacingMode
+    {
+        [HarmonyPostfix]
+        private static void Postfix(FurniturePlacingMode __instance, bool value)
+        {
+            try
+            {
+                // true = entering placement mode
+                // false = leaving placement mode
+                if (value)
+                    return;
+
+                if (__instance == null)
+                    return;
+
+                PlayerObjectHolder holder = Object.FindObjectOfType<PlayerObjectHolder>();
+                if (holder == null)
+                    return;
+
+                if (holder.CurrentObject == null)
+                    return;
+
+                holder.SetNullCurrentObject();
+            }
+            catch (System.Exception ex)
+            {
+                Plugin.Log.LogError("[MultiBox] FurniturePlacingMode postfix error: " + ex);
+            }
+        }
+    }
+    
+
     [HarmonyPatch(typeof(BoxInteraction), "OnThrow")]
     internal static class BoxInteraction_OnThrow_Patch
+    {
+        private static bool Prefix(bool isDown)
+        {
+            return isDown;
+        }
+    }
+
+    [HarmonyPatch(typeof(FurnitureBoxInteraction), "OnThrow")]
+    internal static class FurnitureBoxInteraction_OnThrow_Patch
     {
         private static bool Prefix(bool isDown)
         {
